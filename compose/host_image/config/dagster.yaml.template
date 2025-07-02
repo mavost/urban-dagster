@@ -1,0 +1,50 @@
+telemetry:
+  enabled: false
+
+run_storage:
+  module: dagster_postgres.run_storage
+  class: PostgresRunStorage
+  config:
+    postgres_db:
+      username: "${DAGSTER_POSTGRES_USER}"
+      password: "${DAGSTER_POSTGRES_PASSWORD}"
+      hostname: "${DAGSTER_POSTGRES_HOST}"
+      db_name: "${DAGSTER_POSTGRES_DB}"
+      port: ${DAGSTER_POSTGRES_PORT}
+
+event_log_storage:
+  module: dagster_postgres.event_log
+  class: PostgresEventLogStorage
+  config:
+    postgres_db:
+      username: "${DAGSTER_POSTGRES_USER}"
+      password: "${DAGSTER_POSTGRES_PASSWORD}"
+      hostname: "${DAGSTER_POSTGRES_HOST}"
+      db_name: "${DAGSTER_POSTGRES_DB}"
+      port: ${DAGSTER_POSTGRES_PORT}
+
+schedule_storage:
+  module: dagster_postgres.schedule_storage
+  class: PostgresScheduleStorage
+  config:
+    postgres_db:
+      username: "${DAGSTER_POSTGRES_USER}"
+      password: "${DAGSTER_POSTGRES_PASSWORD}"
+      hostname: "${DAGSTER_POSTGRES_HOST}"
+      db_name: "${DAGSTER_POSTGRES_DB}"
+      port: ${DAGSTER_POSTGRES_PORT}
+
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+
+#compute_logs:
+#  module: dagster._core.storage.compute_logs
+#  class: LocalComputeLogManager
+#  config:
+#    base_dir: "/tmp/dagster/logs"
+
+scheduler:
+  module: dagster.core.scheduler
+  class: DagsterDaemonScheduler
+  

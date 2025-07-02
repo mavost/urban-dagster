@@ -1,0 +1,16 @@
+FROM python:3.10-slim
+
+RUN pip install \
+    dagster \
+    dagster-postgres \
+    dagster-docker
+
+# Add code location code
+WORKDIR /opt/dagster/app
+COPY code /opt/dagster/app
+
+# Expose the gRPC server port
+EXPOSE 4000
+
+# Run the Dagster gRPC server loading your repo.py
+CMD ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-f", "repo.py"]
