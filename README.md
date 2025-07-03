@@ -1,20 +1,24 @@
-# A simple docker-compose template
+# A dagster orchestrator configuration with external metadata store
 
-*Date:* 2022-09-28  
+*Date:* 2025-07-02  
 *Author:* MvS  
-*keywords:* software-architecture, docker-compose
+*keywords:* etl/elt orchestration, dagster, docker-compose
 
 ## Description
 
-Use as a template for a docker-compose based image builds and deployments using a
-`Makefile` and an `.env` file for customization.
+A docker-compose based dagster stack consisting of daemon, webserver and code store using a
+`Makefile` and an `.env` file for convenience and basic security.
 
-## Running the Docker compose pipeline
+## Configuring and running the dagster stack
 
-1. Copy `.env.dist` to `.env` (no adjustments required / for future use with credentials)
-2. Run `make run-compose` and let the container for the *simple* stack come online.
-3. Use <kbd>CTRL</kbd>+<kbd>C</kbd> to shut down the stack
-4. Invoke `make clean` and `make clean stack=extended`, respectively to remove the stack
+1. Copy `.env.dist` to `.env` and add postgres DB credentials for metadata storage
+2. Using DB management tool of choice: log into postgres instance as administrator. Note: `./compose/host-image/config/database.sql` contains necessary commands to:
+    - establish database for dagster meta data storage,
+    - create technical user corresponding to credentials in .env file,
+3. Run `make run-compose` and let the stack come online.
+4. Log into webserver using a webbrowser under [link](http://localhost:3000) to start running dagster jobs.
+5. Use <kbd>CTRL</kbd>+<kbd>C</kbd> to shut down the stack
+6. Invoke `make clean` to remove the stack
 
 ### Manual access to container
 

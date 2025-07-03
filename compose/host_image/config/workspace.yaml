@@ -1,4 +1,4 @@
 load_from:
   - grpc_server:
-      host: docker_example_user_code
+      host: dagster_user_code
       port: 4000

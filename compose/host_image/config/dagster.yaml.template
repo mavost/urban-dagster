@@ -1,3 +1,4 @@
+# https://docs.dagster.io/deployment/oss/dagster-yaml
 telemetry:
   enabled: false
 
@@ -43,6 +44,12 @@ run_coordinator:
 #  class: LocalComputeLogManager
 #  config:
 #    base_dir: "/tmp/dagster/logs"
+
+compute_logs:
+  module: dagster.core.storage.local_compute_log_manager
+  class: LocalComputeLogManager
+  config:
+    base_dir: "/tmp/dagster/logs"
 
 scheduler:
   module: dagster.core.scheduler
