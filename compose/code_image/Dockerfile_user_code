@@ -1,9 +1,29 @@
 FROM python:3.10-slim
 
-RUN pip install \
+# Install required system dependencies
+RUN apt-get update && apt-get install -y \
+    unixodbc \
+    unixodbc-dev \
+    odbcinst \
+    libpq-dev \
+    gnupg \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Optional: Add the PostgreSQL ODBC driver config
+RUN echo "[PostgreSQL ANSI]" >> /etc/odbcinst.ini && \
+    echo "Description=PostgreSQL ODBC driver (ANSI)" >> /etc/odbcinst.ini && \
+    echo "Driver=/usr/lib/x86_64-linux-gnu/odbc/psqlodbcw.so" >> /etc/odbcinst.ini && \
+    echo "Setup=/usr/lib/x86_64-linux-gnu/odbc/libodbcpsqlS.so" >> /etc/odbcinst.ini
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
     dagster \
     dagster-postgres \
-    dagster-docker
+    dagster-docker \
+    pyodbc==5.2.0 \
+    python-dotenv==1.0.1 \
+    requests==2.32.3
 
 # Add code location code
 WORKDIR /opt/dagster/app
@@ -13,4 +33,4 @@ COPY code /opt/dagster/app
 EXPOSE 4000
 
 # Run the Dagster gRPC server loading your repo.py
-CMD ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-f", "repo.py"]
+CMD ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-f", "repo_spotify_etl.py"]
