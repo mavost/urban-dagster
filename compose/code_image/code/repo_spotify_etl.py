@@ -10,14 +10,16 @@ from dagster import op, job, get_dagster_logger
 # Load environment variables
 load_dotenv()
 
+TIME_ANCHOR = datetime(2025, 6, 30, tzinfo=timezone.utc)
+
 # Credentials from env or hardcoded config
 SQL_CREDS = {
     'PG_SERVER': os.getenv('PG_SERVER'),
     'PG_PORT': os.getenv('PG_PORT', '5432'),
     'PG_DB': os.getenv('PG_DB'),
+    'PG_SCHEMA': os.getenv('PG_SCHEMA', 'public'),
     'PG_USER': os.getenv('PG_USER'),
     'PG_PWD': os.getenv('PG_PWD'),
-    'PG_SCHEMA': os.getenv('PG_SCHEMA', 'public')
 }
 
 API_CREDS = {
@@ -26,21 +28,21 @@ API_CREDS = {
     'CLIENT_ID': os.getenv('SPOTIFY_CLIENT_ID'),
     'CLIENT_SECRET': os.getenv('SPOTIFY_CLIENT_SECRET'),
     'OAUTH_URL': os.getenv('SPOTIFY_OAUTH_URL', 'https://accounts.spotify.com/api/token'),
-    'REST_URL': os.getenv('SPOTIFY_REST_URL', 'https://api.spotify.com/v1')
+    'REST_URL': os.getenv('SPOTIFY_REST_URL', 'https://api.spotify.com/v1'),
 }
 
 BI_META = {
+    'BI_SERVICE_NAME': os.getenv('BI_SERVICE_NAME', 'spotify_etl'),
     'BI_STAGING_TABLE': os.getenv('BI_STAGING_TABLE', 'spotify_usage'),
     'BI_LOG_TABLE': os.getenv('BI_LOG_TABLE', 'etl_log'),
-    'BI_SERVICE_NAME': os.getenv('BI_SERVICE_NAME', 'spotify_etl'),
-    'BI_INGEST_TS': 'played_at'
+    'BI_INGEST_TS': os.getenv('BI_INGEST_TS', 'played_at'),
 }
 
 # --- Ops ---
 
-def refresh_access_token(refresh_token):
+def refresh_access_token(refresh_token: str):
     logger = get_dagster_logger()
-    logger.info("Refreshing Spotify token...")
+    logger.info("Refreshing access token...")
 
     res = requests.post(
         "https://accounts.spotify.com/api/token",
@@ -73,13 +75,15 @@ def get_sql_conn():
 def get_latest_timestamp(conn):
     logger = get_dagster_logger()
     cursor = conn.cursor()
-    cursor.execute(f"SELECT COALESCE(MAX(event_time), '2025-06-30') FROM {SQL_CREDS['PG_SCHEMA']}.{BI_META['BI_STAGING_TABLE']}")
+    cursor.execute(f"SELECT MAX(event_time) FROM {SQL_CREDS['PG_SCHEMA']}.{BI_META['BI_STAGING_TABLE']}")
     result = cursor.fetchone()
-    return result[0] if result else datetime(2025, 6, 30)
+    logger.info(f"Getting maximum event timestamp {result}")
+    return result[0] if result else TIME_ANCHOR
 
 @op
 def get_recent_tracks():
     logger = get_dagster_logger()
+    logger.info(f"Attempting to get most recent tracks")
     access_token = API_CREDS['ACCESS_TOKEN']
     refresh_token = API_CREDS['REFRESH_TOKEN']
 
@@ -92,6 +96,7 @@ def get_recent_tracks():
     res = fetch(access_token)
     if res.status_code == 401 and res.json().get("error", {}).get("message") == "The access token expired":
         access_token = refresh_access_token(refresh_token)
+        logger.info(f"Refreshing succeeded")
         res = fetch(access_token)
 
     if res.status_code != 200:
@@ -106,6 +111,7 @@ def get_recent_tracks():
 @op
 def fetch_usage_data(timestamp_ms: int, token: str):
     logger = get_dagster_logger()
+    logger.info(f"Getting all tracks since last insertion")
     base_url = f"{API_CREDS['REST_URL']}/me/player/recently-played"
     headers = {"Authorization": f"Bearer {token}"}
     params = {"after": timestamp_ms, "limit": 20}
@@ -127,6 +133,8 @@ def fetch_usage_data(timestamp_ms: int, token: str):
 
 @op
 def sanitize_json(rows):
+    logger = get_dagster_logger()
+    logger.info(f"Sanitzing payloads")
     for item in rows:
         track = item.get("track", {})
         track.pop("available_markets", None)
@@ -141,6 +149,7 @@ def hash_row(row):
 @op
 def insert_new_data(conn, rows):
     logger = get_dagster_logger()
+    logger.info(f"Staging payloads to DB")
     cursor = conn.cursor()
     inserted_count, duplicate_count = 0, 0
     max_tf_ts = datetime(2025, 6, 30, tzinfo=timezone.utc)
@@ -148,25 +157,31 @@ def insert_new_data(conn, rows):
     for row in rows:
         tf_ts_str = row.get(BI_META['BI_INGEST_TS'])
         if not tf_ts_str:
-            continue
+            logger.warning(f"JSON payload does not contain {BI_META['BI_INGEST_TS']} key")
+            continue  # skip if missing transaction timestamp
         try:
             tf_ts = datetime.fromisoformat(tf_ts_str.replace("Z", "+00:00"))
         except ValueError:
-            continue
+            logger.warning(f"Row:{inserted_count + 1}: Timestamp {BI_META['BI_INGEST_TS']} malformed")
+            continue  # skip malformed timestamp
 
         hash_val = hash_row(row)
         data_str = json.dumps(row)
 
+        # Skip duplicates
         cursor.execute(f"SELECT 1 FROM {SQL_CREDS['PG_SCHEMA']}.{BI_META['BI_STAGING_TABLE']} WHERE hash = ?", (hash_val,))
         if cursor.fetchone():
             duplicate_count += 1
             continue
 
+        # Insert new record
         cursor.execute(
             f"INSERT INTO {SQL_CREDS['PG_SCHEMA']}.{BI_META['BI_STAGING_TABLE']} (event_time, data_json, hash) VALUES (?, ?, ?)",
             (tf_ts, data_str, hash_val)
         )
         inserted_count += 1
+
+        # Update max TF_TIMESTAMP inserted
         if not max_tf_ts or tf_ts > max_tf_ts:
             max_tf_ts = tf_ts
 
@@ -176,6 +191,8 @@ def insert_new_data(conn, rows):
 
 @op
 def log_etl_result(conn, success: bool, inserted_rows: int, max_ts):
+    logger = get_dagster_logger()
+    logger.info(f"Logging ETL run to {SQL_CREDS['PG_SCHEMA']}.{BI_META['BI_LOG_TABLE']}")
     cursor = conn.cursor()
     cursor.execute(
         f"INSERT INTO {SQL_CREDS['PG_SCHEMA']}.{BI_META['BI_LOG_TABLE']} (run_time, service_name, success, inserted_rows, max_event_time) VALUES (?, ?, ?, ?, ?)",
@@ -187,8 +204,11 @@ def log_etl_result(conn, success: bool, inserted_rows: int, max_ts):
 def spotify_usage_etl():
     conn = get_sql_conn()
     latest_ts = get_latest_timestamp(conn)
+
     token = get_recent_tracks()
     raw_data = fetch_usage_data(int(latest_ts.timestamp() * 1000), token)
     cleaned = sanitize_json(raw_data)
     inserted, max_ts = insert_new_data(conn, cleaned)
     log_etl_result(conn, True, inserted, max_ts)
+    conn.close()
+

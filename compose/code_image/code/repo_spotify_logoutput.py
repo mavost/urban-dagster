@@ -1,5 +1,4 @@
 import os
-import logging
 import requests
 from dagster import job, op, get_dagster_logger
 from dotenv import load_dotenv
