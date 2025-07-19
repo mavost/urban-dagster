@@ -22,6 +22,8 @@ services:
       DAGSTER_POSTGRES_USER: ${SQL_META_USER}
       DAGSTER_POSTGRES_PASSWORD: ${SQL_META_PASSWORD}
       DAGSTER_CURRENT_IMAGE: 'dagster_user_code_image'
+    volumes:
+      - ./env/.env:/opt/dagster/dagster_home/.env:ro
     networks:
       - mydefaultstack
 
