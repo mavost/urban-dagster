@@ -1,7 +1,7 @@
 version: '3'
 services:
 
- # This service runs the gRPC server that loads your user code, in both dagster-webserver
+  # This service runs the gRPC server that loads your user code, in both dagster-webserver
   # and dagster-daemon. By setting DAGSTER_CURRENT_IMAGE to its own image, we tell the
   # run launcher to use this same image when launching runs in a new container as well.
   # Multiple containers like this can be deployed separately - each just needs to run on
@@ -23,7 +23,7 @@ services:
       DAGSTER_POSTGRES_PASSWORD: ${SQL_META_PASSWORD}
       DAGSTER_CURRENT_IMAGE: 'dagster_user_code_image'
     volumes:
-      - ./env/.env:/opt/dagster/dagster_home/.env:ro
+      - ./source2sink_envs/.env:/opt/dagster/dagster_home/.env:ro
     networks:
       - mydefaultstack
 
