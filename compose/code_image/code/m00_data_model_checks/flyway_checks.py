@@ -25,7 +25,7 @@ def flyway_current_state(context, env: str):
     config_path = os.path.join(FLYWAY_CONF_DIR, f"flyway_{env}.conf")
     try:
         result = run(
-            ["flyway", f"-configFiles={config_path}", "info"],
+            ["flyway", f"-configFiles={config_path}", "info", "-skipCheckForUpdate"],
             capture_output=True,
             text=True,
             check=True
@@ -47,7 +47,8 @@ def flyway_migrate(context, env: str):
     config_path = os.path.join(FLYWAY_CONF_DIR, f"flyway_{env}.conf")
     try:
         result = run(
-            ["flyway", f"-configFiles={config_path}", "-X", "migrate"],
+            #["flyway", f"-configFiles={config_path}", "-X", "migrate"],
+            ["flyway", f"-configFiles={config_path}", "migrate", "-skipCheckForUpdate"],
             capture_output=True,
             text=True,
             check=True
