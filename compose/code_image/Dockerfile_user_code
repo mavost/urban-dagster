@@ -25,6 +25,12 @@ RUN pip install --no-cache-dir \
     python-dotenv==1.0.1 \
     requests==2.32.3
 
+# Install Flyway CLI
+RUN curl -L https://repo1.maven.org/maven2/org/flywaydb/flyway-commandline/10.13.0/flyway-commandline-10.13.0-linux-x64.tar.gz \
+  | tar xz && mv flyway-* /opt/flyway
+
+ENV PATH="/opt/flyway:${PATH}"
+
 # Add code location code
 WORKDIR /opt/dagster/app
 COPY code /opt/dagster/app
