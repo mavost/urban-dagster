@@ -7,7 +7,7 @@ load_dotenv()
 
 # --- Token Refresh Logic ---
 
-def refresh_access_token(refresh_token):
+def logoutput_refresh_access_token(refresh_token):
     logger = get_dagster_logger()
     logger.info("Refreshing Spotify token...")
 
@@ -29,7 +29,7 @@ def refresh_access_token(refresh_token):
 # --- Dagster Ops ---
 
 @op
-def get_recent_tracks():
+def logoutput_get_recent_tracks():
     logger = get_dagster_logger()
     access_token = os.getenv("SPOTIFY_ACCESS_TOKEN")
     refresh_token = os.getenv("SPOTIFY_REFRESH_TOKEN")
@@ -42,7 +42,7 @@ def get_recent_tracks():
 
     res = fetch(access_token)
     if res.status_code == 401 and res.json().get("error", {}).get("message") == "The access token expired":
-        access_token = refresh_access_token(refresh_token)
+        access_token = logoutput_refresh_access_token(refresh_token)
         res = fetch(access_token)
 
     if res.status_code != 200:
@@ -51,7 +51,7 @@ def get_recent_tracks():
     return res.json()
 
 @op
-def parse_tracks(response_json):
+def logoutput_parse_tracks(response_json):
     tracks = []
     for item in response_json.get("items", []):
         track = item["track"]
@@ -63,7 +63,7 @@ def parse_tracks(response_json):
     return tracks
 
 @op
-def store_tracks(tracks):
+def logoutput_store_tracks(tracks):
     logger = get_dagster_logger()
     for i, track in enumerate(tracks):
         logger.info(f"{i+1}. {track['name']} – {track['artist']} @ {track['played_at']}")
@@ -71,7 +71,7 @@ def store_tracks(tracks):
 # --- Dagster Job ---
 
 @job
-def spotify_etl():
-    response_json = get_recent_tracks()
-    parsed = parse_tracks(response_json)
-    store_tracks(parsed)
+def spotify_logoutput_etl():
+    response_json = logoutput_get_recent_tracks()
+    parsed = logoutput_parse_tracks(response_json)
+    logoutput_store_tracks(parsed)
