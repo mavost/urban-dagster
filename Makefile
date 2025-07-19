@@ -2,7 +2,7 @@ MAKEFLAGS += --warn-undefined-variables
 .SHELLFLAGS := -eu -o pipefail -c
 
 all: help
-.PHONY: all, help, run-compose, clean
+.PHONY: all help run-compose clean
 # https://medium.com/freestoneinfotech/simplifying-docker-compose-operations-using-makefile-26d451456d63
 
 # Use bash for inline if-statements
