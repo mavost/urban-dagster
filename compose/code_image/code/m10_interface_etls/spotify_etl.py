@@ -113,6 +113,7 @@ def get_recent_tracks() -> str:
     if res.status_code != 200:
         raise Exception(f"Spotify API Error: {res.status_code} - {res.text}")
     
+    res = res.json()
     for i, item in enumerate(res.get("items", [])):
         track = item["track"]
         logger.info(f"{i+1}. {track['name']} – {track['artists'][0]['name']} @ {item['played_at']}")
