@@ -1,14 +1,6 @@
 -- V1__baseline_init.sql
-
-CREATE SCHEMA IF NOT EXISTS ${schema};
-
-GRANT USAGE ON SCHEMA ${schema} TO spotify_user;
-GRANT CREATE ON SCHEMA ${schema} TO spotify_user;
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ${schema} TO spotify_user;
-
-ALTER DEFAULT PRIVILEGES IN SCHEMA ${schema}
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO spotify_user;
+-- As spotify_user: Create a sink and etl_log tables
+-- The user becomes owner, can manipulate data, and can alter the tables using flyway
 
 CREATE TABLE ${schema}.staging_playback_data (
     event_time TIMESTAMPTZ,
@@ -19,9 +11,9 @@ CREATE TABLE ${schema}.staging_playback_data (
 CREATE UNIQUE INDEX idx_hash_unique ON ${schema}.staging_playback_data (hash);
 
 CREATE TABLE ${schema}.etl_log (
-    run_time TIMESTAMP,
+    run_time TIMESTAMPTZ,
     service_name VARCHAR(30),
     success BOOLEAN,
     inserted_rows INTEGER,
-    max_event_time TIMESTAMP
+    max_event_time TIMESTAMPTZ
 );
