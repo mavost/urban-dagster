@@ -255,7 +255,7 @@ def log_etl_result(context, result_tuple: ETLResult):
 
 
 @job(name="spotify_usage_etl", tags={"module": "m10_interface_etls"})
-def m10_spotify_usage_etl():
+def spotify_usage_etl():
 
     latest_ts = get_latest_timestamp()
 
