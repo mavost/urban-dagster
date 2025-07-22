@@ -19,10 +19,9 @@ current_service ?= dagster_user_code
 
 ##@ Setup
 run-compose: ## set up stack
-	docker rmi -f $$(docker images -q $(current_service)) 2>/dev/null || true
-	docker-compose -f docker-compose.yaml build $(current_service)
-	docker-compose -f docker-compose.yaml up -d $(current_service)
+	docker compose -f docker-compose.yaml build $(current_service)
+	docker compose -f docker-compose.yaml up -d $(current_service)
 
 ##@ Tear-down
 clean: ## clean up stack
-	docker-compose -f docker-compose.yaml down
+	docker compose -f docker-compose.yaml down

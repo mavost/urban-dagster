@@ -1,4 +1,3 @@
-version: '3'
 services:
 
   # This service runs the gRPC server that loads your user code, in both dagster-webserver
