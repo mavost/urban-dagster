@@ -70,8 +70,8 @@ def logoutput_store_tracks(tracks):
 
 # --- Dagster Job ---
 
-@job
-def m10_spotify_logoutput_etl():
+@job(name="spotify_logoutput_etl", tags={"module": "m10_interface_etls"})
+def spotify_logoutput_etl():
     response_json = logoutput_get_recent_tracks()
     parsed = logoutput_parse_tracks(response_json)
     logoutput_store_tracks(parsed)

@@ -71,6 +71,6 @@ def run_flyway_ops(env: str):
 def flyway_for_env():
     list_envs().map(run_flyway_ops)
 
-@job
-def m00_flyway_spotify_sink():
+@job(name="flyway_spotify_sink", tags={"module": "m10_interface_etls"})
+def flyway_spotify_sink():
     flyway_for_env()
