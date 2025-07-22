@@ -12,7 +12,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 
-from dagster import op, job, get_dagster_logger
+from dagster import op, job, get_dagster_logger,resource
+from contextlib import contextmanager
+from typing import ContextManager
 
 # Load environment variables one directory up from the module
 load_dotenv(dotenv_path=Path(os.getenv("DAGSTER_HOME", ".")) / ".env")
@@ -47,6 +49,29 @@ BI_META = {
     'BI_INGEST_TS': os.getenv('BI_INGEST_TS', 'played_at'),
 }
 
+# --- Resources ---
+
+@resource
+@contextmanager
+def sql_conn_resource(_) -> ContextManager[pyodbc.Connection]:
+    logger = get_dagster_logger()
+    logger.info("Connecting to DB")
+
+    conn = pyodbc.connect(
+        f"DRIVER={{PostgreSQL Unicode}};"
+        f"SERVER={SQL_CREDS['PG_SERVER']},{SQL_CREDS['PG_PORT']};"
+        f"DATABASE={SQL_CREDS['PG_DB']};"
+        f"SCHEMA={SQL_CREDS['PG_SCHEMA']};"
+        f"UID={SQL_CREDS['PG_USER']};"
+        f"PWD={SQL_CREDS['PG_PWD']}"
+    )
+
+    try:
+        yield conn
+    finally:
+        logger.info("Closing DB connection")
+        conn.close()
+
 # --- Ops ---
 
 def refresh_access_token(refresh_token: str) -> str:
@@ -80,14 +105,24 @@ def get_sql_conn() -> pyodbc.Connection:
         f"PWD={SQL_CREDS['PG_PWD']}"
     )
 
-@op
-def get_latest_timestamp(conn: pyodbc.Connection) -> int:
+@op(required_resource_keys={"sql_conn"})
+def get_latest_timestamp(context) -> int:
     logger = get_dagster_logger()
+
+    conn = context.resources.sql_conn
     cursor = conn.cursor()
-    cursor.execute(f"SELECT MAX(event_time) FROM {SQL_CREDS['PG_SCHEMA']}.{BI_META['BI_STAGING_TABLE']}")
+    query = f"SELECT MAX(event_time) FROM {SQL_CREDS['PG_SCHEMA']}.{BI_META['BI_STAGING_TABLE']}"
+    logger.info(f"Query: {query}")
+    cursor.execute(query)
     result = cursor.fetchone()
     logger.info(f"Getting maximum event timestamp {result}")
-    max_timestamp = (result[0] if result else TIME_ANCHOR).timestamp()
+
+    # Use TIME_ANCHOR if result is None or result[0] is None
+    if result is None or result[0] is None:
+        max_timestamp = TIME_ANCHOR.timestamp()
+        logger.warning("Result is NULL; using TIME_ANCHOR as fallback.")
+    else:
+        max_timestamp = result[0].timestamp()
 
     return int(max_timestamp) * 1000
 
@@ -154,14 +189,16 @@ def sanitize_json(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         album.pop("available_markets", None)
     return rows
 
-@op
 def hash_row(row: List[Dict[str, Any]]) -> str:
     return hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest()
 
-@op
-def insert_new_data(conn: pyodbc.Connection, rows: List[Dict[str, Any]]) -> ETLResult :
+@op(required_resource_keys={"sql_conn"})
+def insert_new_data(context, rows: List[Dict[str, Any]]) -> ETLResult :
     logger = get_dagster_logger()
     logger.info(f"Staging payloads to DB")
+    
+    conn = context.resources.sql_conn
+
     cursor = conn.cursor()
     inserted_count, duplicate_count = 0, 0
     max_tf_ts = datetime(2025, 6, 30, tzinfo=timezone.utc)
@@ -201,10 +238,12 @@ def insert_new_data(conn: pyodbc.Connection, rows: List[Dict[str, Any]]) -> ETLR
     logger.info(f"{inserted_count} inserted, {duplicate_count} duplicates")
     return ETLResult(inserted_count, max_tf_ts)
 
-@op
-def log_etl_result(conn: pyodbc.Connection, result_tuple: ETLResult) -> bool:
+@op(required_resource_keys={"sql_conn"})
+def log_etl_result(context, result_tuple: ETLResult):
     logger = get_dagster_logger()
     logger.info(f"Logging ETL run to {SQL_CREDS['PG_SCHEMA']}.{BI_META['BI_LOG_TABLE']}")
+
+    conn = context.resources.sql_conn
 
     inserted_rows, max_ts = result_tuple
     cursor = conn.cursor()
@@ -213,27 +252,17 @@ def log_etl_result(conn: pyodbc.Connection, result_tuple: ETLResult) -> bool:
         (datetime.now(timezone.utc), BI_META['BI_SERVICE_NAME'], True, inserted_rows, max_ts)
     )
     conn.commit()
-    return True
 
-@op
-def close_sql_conn(conn: pyodbc.Connection, _: Any):
-    logger = get_dagster_logger()
-    logger.info(f"Closing connection to {SQL_CREDS['PG_SERVER']}")
-    conn.close()
 
-@job
+@job(name="spotify_usage_etl", tags={"module": "m10_interface_etls"})
 def m10_spotify_usage_etl():
 
-    conn = get_sql_conn()
-
-    latest_ts = get_latest_timestamp(conn)
+    latest_ts = get_latest_timestamp()
 
     token = get_recent_tracks()
     raw_data = fetch_usage_data(latest_ts, token)
 
     cleaned = sanitize_json(raw_data)
 
-    result_tuple = insert_new_data(conn, cleaned)
-    log_result = log_etl_result(conn, result_tuple)
-
-    close_sql_conn(conn, log_result)
+    result_tuple = insert_new_data(cleaned)
+    log_etl_result(result_tuple)
