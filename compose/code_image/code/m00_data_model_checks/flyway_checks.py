@@ -8,7 +8,7 @@ from dagster import job, graph, op, Config, DynamicOut, DynamicOutput
 load_dotenv(dotenv_path=Path(os.getenv("DAGSTER_HOME", ".")) / ".env")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-FLYWAY_CONF_DIR = os.path.join(BASE_DIR, "spotify-metadata-flyway")
+FLYWAY_CONF_DIR = os.path.join(BASE_DIR, "flyway_spotify_sink")
 
 class FlywayConfig(Config):
     env: str  # "dev", "test", or "prod"
@@ -72,5 +72,5 @@ def flyway_for_env():
     list_envs().map(run_flyway_ops)
 
 @job
-def flyway_spotify_sink():
+def m00_flyway_spotify_sink():
     flyway_for_env()

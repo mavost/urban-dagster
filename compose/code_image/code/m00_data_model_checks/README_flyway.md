@@ -13,7 +13,7 @@ to clear the path for ETL/ELT loading processes.
 dagster_app_root/
 ├── m00_data_model_checks/
 │   ├──flyway_checks.py            # contains the Dagster job + ops
-│   └── spotify-metadata-flyway/
+│   └── flyway_spotify_sink/
 │       ├── flyway_dev.conf
 │       ├── flyway_test.conf
 │       ├── flyway_prod.conf
@@ -39,16 +39,16 @@ usually handled by an admin user, e.g.: `CREATE SCHEMA IF NOT EXISTS dev;`
 
 ```sql
 -- As admin: Create a dedicated metadata database for REST API ingestion
-CREATE DATABASE spotify_metadata;
+CREATE DATABASE spotify_sink;
 
 -- Create a user account for the sink system (e.g. ingestion pipeline)
 CREATE USER spotify_user WITH PASSWORD 'FFtrwmo4---fgd&645';
 
 -- Grant basic connection privileges
-GRANT CONNECT ON DATABASE spotify_metadata TO spotify_user;
+GRANT CONNECT ON DATABASE spotify_sink TO spotify_user;
 
--- 🆕 Switch to the spotify_metadata DB, then create schema first
--- Run this after connecting to spotify_metadata
+-- 🆕 Switch to the spotify_sink DB, then create schema first
+-- Run this after connecting to spotify_sink
 DO $$
 DECLARE
   schema_name TEXT;
@@ -58,21 +58,11 @@ BEGIN
     EXECUTE format('CREATE SCHEMA IF NOT EXISTS %I;', schema_name);
     EXECUTE format('GRANT USAGE ON SCHEMA %I TO spotify_user;', schema_name);
     EXECUTE format('GRANT CREATE ON SCHEMA %I TO spotify_user;', schema_name);
+    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO spotify_user;', schema_name);
     EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO spotify_user;', schema_name);
   END LOOP;
 END
 $$;
-
--- Grant access to the 'dev' schema
-GRANT USAGE ON SCHEMA dev TO spotify_user;
-GRANT CREATE ON SCHEMA dev TO spotify_user;
-
--- Grant schema-wide DML permissions
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA dev TO spotify_user;
-
--- Ensure future tables also grant DML access to spotify_user
-ALTER DEFAULT PRIVILEGES IN SCHEMA dev
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO spotify_user;
 ```
 
 ## Data sink setup andd migration design

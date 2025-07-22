@@ -222,7 +222,7 @@ def close_sql_conn(conn: pyodbc.Connection, _: Any):
     conn.close()
 
 @job
-def spotify_usage_etl():
+def m10_spotify_usage_etl():
 
     conn = get_sql_conn()
 

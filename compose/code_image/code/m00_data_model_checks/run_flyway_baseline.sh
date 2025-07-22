@@ -1,10 +1,10 @@
 #!/bin/bash
-PG_DB=spotify_metadata
+PG_DB=spotify_sink
 PG_USER=spotify_user
 PG_PWD=<PASSWORD>
 TARGET_SCHEMA=dev
 CONTAINER=<CONTAINER_NAME>
-CONFIG_FILE="/opt/dagster/app/m00_data_model_checks/spotify-metadata-flyway/flyway_$TARGET_SCHEMA.conf"
+CONFIG_FILE="/opt/dagster/app/m00_data_model_checks/flyway_spotify_sink/flyway_$TARGET_SCHEMA.conf"
 
 docker exec \
   -e PG_DB=$PG_DB \
