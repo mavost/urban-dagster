@@ -2,27 +2,26 @@ from subprocess import run, CalledProcessError
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from dagster import job, graph, op, Config, DynamicOut, DynamicOutput
+from dagster import asset, DynamicPartitionsDefinition, AssetExecutionContext
 
-# Load environment from .env file (once at module import time)
+from dagster import RunRequest, sensor, AssetKey
+
+# Load environment variables
 load_dotenv(dotenv_path=Path(os.getenv("DAGSTER_HOME", ".")) / ".env")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FLYWAY_CONF_DIR = os.path.join(BASE_DIR, "flyway_spotify_sink")
 
-class FlywayConfig(Config):
-    env: str  # "dev", "test", or "prod"
+# Define dynamic environments — this allows per-env runs
+flyway_env_partitions = DynamicPartitionsDefinition(name="flyway_envs")
 
-# Return dynamic envs as Dagster DynamicOutput
-@op(out=DynamicOut(str))
-def list_envs():
-    for env in ["dev"]: # , "test", "prod"
-        yield DynamicOutput(env, mapping_key=env)
 
-@op
-def flyway_current_state(context, env: str):
+@asset(partitions_def=flyway_env_partitions, tags={"module": "m00_data_model_checks"})
+def flyway_current_state(context: AssetExecutionContext):
+    env = context.partition_key
     context.log.info(f"Running Flyway INFO for: {env}")
     config_path = os.path.join(FLYWAY_CONF_DIR, f"flyway_{env}.conf")
+
     try:
         result = run(
             ["flyway", f"-configFiles={config_path}", "info", "-skipCheckForUpdate"],
@@ -39,15 +38,16 @@ def flyway_current_state(context, env: str):
         context.log.error(f"stdout:\n{e.stdout}")
         context.log.error(f"stderr:\n{e.stderr}")
         raise
-    return env  # Pass to next op
 
-@op
-def flyway_migrate(context, env: str):
+
+@asset(partitions_def=flyway_env_partitions, deps=["flyway_current_state"], tags={"module": "m00_data_model_checks"})
+def flyway_migrate(context: AssetExecutionContext):
+    env = context.partition_key
     context.log.info(f"Running Flyway MIGRATE for: {env}")
     config_path = os.path.join(FLYWAY_CONF_DIR, f"flyway_{env}.conf")
+
     try:
         result = run(
-            #["flyway", f"-configFiles={config_path}", "-X", "migrate"],
             ["flyway", f"-configFiles={config_path}", "migrate", "-skipCheckForUpdate"],
             capture_output=True,
             text=True,
@@ -62,15 +62,3 @@ def flyway_migrate(context, env: str):
         context.log.error(f"stdout:\n{e.stdout}")
         context.log.error(f"stderr:\n{e.stderr}")
         raise
-
-@graph
-def run_flyway_ops(env: str):
-    flyway_migrate(flyway_current_state(env))
-
-@graph
-def flyway_for_env():
-    list_envs().map(run_flyway_ops)
-
-@job(name="flyway_spotify_sink", tags={"module": "m10_interface_etls"})
-def flyway_spotify_sink():
-    flyway_for_env()

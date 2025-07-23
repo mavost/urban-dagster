@@ -1,4 +1,6 @@
 #!/bin/bash
+PG_SERVER=<SINK_SERVER>
+PG_PORT=<SINK_PORT>
 PG_DB=spotify_sink
 PG_USER=spotify_user
 PG_PWD=<PASSWORD>
@@ -7,6 +9,8 @@ CONTAINER=<CONTAINER_NAME>
 CONFIG_FILE="/opt/dagster/app/m00_data_model_checks/flyway_spotify_sink/flyway_$TARGET_SCHEMA.conf"
 
 docker exec \
+  -e PG_SERVER=$PG_SERVER \
+  -e PG_PORT=$PG_PORT \
   -e PG_DB=$PG_DB \
   -e PG_USER=$PG_USER \
   -e PG_PWD=$PG_PWD \
